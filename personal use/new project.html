@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Interactive Quiz Maker</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --background: #f3f4f6;
+            --surface: #ffffff;
+            --text: #1f2937;
+            --success: #22c55e;
+            --error: #ef4444;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            line-height: 1.5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--surface);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .instructions {
+            background-color: #f0fdf4;
+            border-left: 4px solid var(--success);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 250px;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Quiz Styling */
+        .question-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+
+        .question-text {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #111827;
+        }
+
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .option-btn {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            text-align: left;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-weight: normal;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        /* Feedback States */
+        .option-btn.correct {
+            background-color: #dcfce7 !important;
+            border-color: var(--success) !important;
+            color: #14532d !important;
+            font-weight: 600;
+        }
+
+        .option-btn.incorrect {
+            background-color: #fee2e2 !important;
+            border-color: var(--error) !important;
+            color: #7f1d1d !important;
+        }
+
+        .feedback-msg {
+            margin-top: 14px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .feedback-msg.correct { color: var(--success); }
+        .feedback-msg.incorrect { color: var(--error); }
+
+        .actions-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-secondary {
+            background-color: #6b7280;
+        }
+        .btn-secondary:hover {
+            background-color: #555b66;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setup-screen">
+        <h1>Paste Your Questions</h1>
+        <div class="instructions">
+            <strong>🔀 Smart Shuffling Enabled:</strong> Paste your raw text normally. The application will automatically shuffle your choices so the correct answers are distributed randomly across A, B, C, or D.
+        </div>
+        <textarea id="quiz-input" placeholder="Example format:&#10;&#10;1. What is the capital of France?&#10;A) London&#10;B) Paris&#10;C) Berlin&#10;D) Madrid&#10;Answer: B&#10;&#10;2. Which planet is known as the Red Planet?&#10;A. Earth&#10;B. Mars&#10;Correct: B"></textarea>
+        <button id="generate-btn">Generate Shuffled Quiz</button>
+    </div>
+
+    <div id="quiz-screen" class="hidden">
+        <h1 id="quiz-title">Interactive Practice Quiz</h1>
+        <div id="quiz-container"></div>
+        <div class="actions-row">
+            <button id="back-btn" class="btn-secondary">← Back / Paste New Questions</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('generate-btn').addEventListener('click', buildQuiz);
+    document.getElementById('back-btn').addEventListener('click', showSetup);
+
+    function showSetup() {
+        document.getElementById('setup-screen').classList.remove('hidden');
+        document.getElementById('quiz-screen').classList.add('hidden');
+    }
+
+    // Standard Fisher-Yates Shuffling Algorithm
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function buildQuiz() {
+        const rawText = document.getElementById('quiz-input').value.trim();
+        if (!rawText) {
+            alert('Please paste some questions first!');
+            return;
+        }
+
+        const lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const parsedQuestions = [];
+        let currentQuestion = { text: '', options: [], answer: '' };
+
+        lines.forEach(line => {
+            // 1. Detect Answer line
+            if (/^(answer|correct|ans)[\s:\-]+/i.test(line)) {
+                const match = line.match(/^(answer|correct|ans)[\s:\-]+([a-e1-4])/i);
+                if (match) {
+                    currentQuestion.answer = match[2].toUpperCase();
+                }
+            } 
+            // 2. Detect Options line (e.g., A., B), C -)
+            else if (/^[a-e][\)\.\-]\s*/i.test(line)) {
+                const letter = line.match(/^[a-e]/i)[0].toUpperCase();
+                const text = line.replace(/^[a-e][\)\.\-]\s*/i, '').trim();
+                currentQuestion.options.push({ letter, text, isCorrect: false });
+            } 
+            // 3. Detect Question Text line
+            else {
+                if (currentQuestion.options.length > 0 || currentQuestion.answer) {
+                    parsedQuestions.push(currentQuestion);
+                    currentQuestion = { text: line, options: [], answer: '' };
+                } else {
+                    if (currentQuestion.text) {
+                        currentQuestion.text += ' ' + line;
+                    } else {
+                        currentQuestion.text = line;
+                    }
+                }
+            }
+        });
+
+        if (currentQuestion.text || currentQuestion.options.length > 0) {
+            parsedQuestions.push(currentQuestion);
+        }
+
+        const validQuestions = parsedQuestions.filter(q => q.options.length > 0);
+
+        if (validQuestions.length === 0) {
+            alert("Could not extract questions. Verify your layout rules match options like 'A. text' and answers like 'Answer: A'.");
+            return;
+        }
+
+        const quizContainer = document.getElementById('quiz-container');
+        quizContainer.innerHTML = ''; 
+
+        validQuestions.forEach((q, index) => {
+            // Flag the true answer on the options objects before we scramble them
+            if (q.answer) {
+                q.options.forEach(opt => {
+                    if (opt.letter === q.answer) {
+                        opt.isCorrect = true;
+                    }
+                });
+            }
+
+            // Shuffle the options array seamlessly
+            const shuffledOptions = shuffleArray([...q.options]);
+
+            const card = document.createElement('div');
+            card.className = 'question-card';
+
+            const qTextDiv = document.createElement('div');
+            qTextDiv.className = 'question-text';
+            qTextDiv.textContent = q.text ? q.text : `Question ${index + 1}`;
+            card.appendChild(qTextDiv);
+
+            const optionsList = document.createElement('div');
+            optionsList.className = 'options-list';
+
+            // Render options using clean new alphabetical letter assignments (A, B, C...)
+            shuffledOptions.forEach((opt, idx) => {
+                const displayLetter = String.fromCharCode(65 + idx); // Generates A, B, C, D...
+                
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerHTML = `<strong>${displayLetter}:</strong> ${opt.text}`;
+                
+                if (opt.isCorrect) {
+                    btn.dataset.truth = "true";
+                }
+
+                btn.addEventListener('click', () => {
+                    // Lock down alternative choices
+                    const allButtons = optionsList.querySelectorAll('.option-btn');
+                    allButtons.forEach(b => b.disabled = true);
+
+                    const feedbackDiv = card.querySelector('.feedback-msg');
+
+                    if (!q.answer) {
+                        btn.classList.add('correct');
+                        feedbackDiv.className = 'feedback-msg correct';
+                        feedbackDiv.textContent = "Selection saved! (No answer key detected).";
+                        return;
+                    }
+
+                    if (opt.isCorrect) {
+                        btn.classList.add('correct');
+                        feedbackDiv.className = 'feedback-msg correct';
+                        feedbackDiv.textContent = "🎉 Correct!";
+                    } else {
+                        btn.classList.add('incorrect');
+                        
+                        // Expose where the correct answer was randomized to
+                        allButtons.forEach(b => {
+                            if (b.dataset.truth === "true") {
+                                b.classList.add('correct');
+                                const correctLetter = b.querySelector('strong').textContent.replace(':', '');
+                                feedbackDiv.textContent = `❌ Incorrect. The correct choice was ${correctLetter}.`;
+                            }
+                        });
+                        feedbackDiv.className = 'feedback-msg incorrect';
+                    }
+                });
+
+                optionsList.appendChild(btn);
+            });
+
+            card.appendChild(optionsList);
+
+            const feedback = document.createElement('div');
+            feedback.className = 'feedback-msg';
+            card.appendChild(feedback);
+
+            quizContainer.appendChild(card);
+        });
+
+        document.getElementById('setup-screen').classList.add('hidden');
+        document.getElementById('quiz-screen').classList.remove('hidden');
+        window.scrollTo(0, 0);
+    }
+</script>
+
+</body>
+</html>
